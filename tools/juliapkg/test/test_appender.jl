@@ -84,6 +84,7 @@ end
         (; col_name = :largeval, duck_type = "INTEGER", append_value = Int32(2^16)),
         (; col_name = :uuid, duck_type = "UUID", append_value = uuid),
         (; col_name = :varchar, duck_type = "VARCHAR", append_value = "Foo"),
+        (; col_name = :blob, duck_type = "BLOB", append_value = UInt8[0x00, 0x01, 0xff, 0x00]),
         # lists
         (; col_name = :list_bool, duck_type = "BOOLEAN[]", append_value = Vector{Bool}([true, false, true])),
         (; col_name = :list_int8, duck_type = "TINYINT[]", append_value = Vector{Int8}([1, -2, 3])),
@@ -160,21 +161,26 @@ end
 @testset "Appender Struct" begin
     db = DBInterface.connect(DuckDB.DB)
 
-    DBInterface.execute(db, "CREATE TABLE struct_tbl(s STRUCT(a INTEGER, b VARCHAR))")
+    DBInterface.execute(db, "CREATE TABLE struct_tbl(s STRUCT(a INTEGER, b VARCHAR, c BLOB))")
     appender = DuckDB.Appender(db, "struct_tbl")
 
-    DuckDB.append(appender, (a = Int32(1), b = "hello"))
+    DuckDB.append(appender, (a = Int32(1), b = "hello", c = UInt8[0x01, 0x02]))
     DuckDB.end_row(appender)
-    DuckDB.append(appender, (a = Int32(2), b = missing))
+    DuckDB.append(appender, (a = Int32(2), b = missing, c = missing))
     DuckDB.end_row(appender)
-    DuckDB.append(appender, (a = missing, b = "world"))
+    DuckDB.append(appender, (a = missing, b = "world", c = UInt8[0x00, 0xff]))
     DuckDB.end_row(appender)
     DuckDB.append(appender, missing)
     DuckDB.end_row(appender)
     DuckDB.close(appender)
 
     df = DataFrame(DBInterface.execute(db, "SELECT * FROM struct_tbl"))
-    @test isequal(df.s, [(a = 1, b = "hello"), (a = 2, b = missing), (a = missing, b = "world"), missing])
+    @test isequal(df.s, [
+        (a = 1, b = "hello", c = UInt8[0x01, 0x02]),
+        (a = 2, b = missing, c = missing),
+        (a = missing, b = "world", c = UInt8[0x00, 0xff]),
+        missing
+    ])
 
     DBInterface.close!(db)
 end
@@ -197,3 +203,4 @@ end
 
     DBInterface.close!(db)
 end
+
