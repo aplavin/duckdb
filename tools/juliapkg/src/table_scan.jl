@@ -110,6 +110,8 @@ function _scan_struct_vector!(vector::Vec, child_columns::NamedTuple, row_offset
             _scan_struct_vector!(child_vector, nested_children, row_offset, scan_count)
         elseif child_type <: AbstractString
             _scan_string_into_vector!(child_vector, child_col, row_offset, scan_count)
+        elseif child_type <: AbstractVector{UInt8}
+            _scan_string_into_vector!(child_vector, child_col, row_offset, scan_count)
         else
             _scan_into_vector!(child_vector, child_col, row_offset, scan_count, julia_to_duck_type(child_type))
         end
@@ -119,6 +121,8 @@ end
 function tbl_scan_function(tbl, entry)
     result_type = table_result_type(tbl, entry)
     if result_type <: AbstractString
+        return tbl_scan_string_column
+    elseif result_type <: AbstractVector{UInt8}
         return tbl_scan_string_column
     elseif result_type <: NamedTuple
         return tbl_scan_struct_column

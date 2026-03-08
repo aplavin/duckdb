@@ -152,17 +152,19 @@ end
         df = columntable(results)
         @test isequal(df, my_df)
 
-        # date/time/timestamp
+        # date/time/timestamp/blob
         my_df = (
             date = [Date(1992, 9, 20), missing, Date(1950, 2, 3)],
             time = [Time(23, 3, 1), Time(11, 49, 33), missing],
-            timestamp = [DateTime(1992, 9, 20, 23, 3, 1), DateTime(1950, 2, 3, 11, 49, 3), missing]
+            timestamp = [DateTime(1992, 9, 20, 23, 3, 1), DateTime(1950, 2, 3, 11, 49, 3), missing],
+            blob = Union{Vector{UInt8}, Missing}[UInt8[0x00, 0x01, 0xff], missing, UInt8[0xde, 0xad]]
         )
 
         DuckDB.register_table(con, tblf(my_df), "my_df")
 
         results = DBInterface.execute(con, "SELECT * FROM my_df")
         df = columntable(results)
+        @test typeof(df) == typeof(my_df)
         @test isequal(df, my_df)
 
         DBInterface.close!(con)
@@ -312,10 +314,10 @@ end
 
     my_tbl = (
         id = [1, 2, 3],
-        s = @NamedTuple{a::Int32, b::String}[
-            (a = Int32(10), b = "hello"),
-            (a = Int32(20), b = "world"),
-            (a = Int32(30), b = "foo"),
+        s = @NamedTuple{a::Int32, b::String, c::Vector{UInt8}}[
+            (a = Int32(10), b = "hello", c = UInt8[0x01, 0x02]),
+            (a = Int32(20), b = "world", c = UInt8[0xde, 0xad]),
+            (a = Int32(30), b = "foo", c = UInt8[0xff]),
         ]
     )
 
@@ -323,12 +325,20 @@ end
     results = DBInterface.execute(con, "SELECT * FROM my_tbl")
     df = columntable(results)
     @test isequal(df.id, [1, 2, 3])
-    @test isequal(df.s, [(a = 10, b = "hello"), (a = 20, b = "world"), (a = 30, b = "foo")])
+    @test isequal(df.s, [
+        (a = 10, b = "hello", c = UInt8[0x01, 0x02]),
+        (a = 20, b = "world", c = UInt8[0xde, 0xad]),
+        (a = 30, b = "foo", c = UInt8[0xff]),
+    ])
 
     # projection pushdown: select only struct column
     results = DBInterface.execute(con, "SELECT s FROM my_tbl")
     df = columntable(results)
-    @test isequal(df.s, [(a = 10, b = "hello"), (a = 20, b = "world"), (a = 30, b = "foo")])
+    @test isequal(df.s, [
+        (a = 10, b = "hello", c = UInt8[0x01, 0x02]),
+        (a = 20, b = "world", c = UInt8[0xde, 0xad]),
+        (a = 30, b = "foo", c = UInt8[0xff]),
+    ])
 
     # SQL access to struct fields
     results = DBInterface.execute(con, "SELECT s.a FROM my_tbl")
