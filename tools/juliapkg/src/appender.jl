@@ -113,6 +113,12 @@ function append(appender::Appender, val::AbstractVector{T}) where {T}
     return
 end
 
+function append(appender::Appender, val::NamedTuple)
+    value = create_value(val)
+    duckdb_append_value(appender.handle, value.handle)
+    return
+end
+
 function append(appender::Appender, val::Any)
     println(val)
     throw(NotImplementedException("unsupported type for append"))

@@ -153,6 +153,47 @@ end
         @test isequal(df[!, row.col_name], [ref_value])
     end
 
-    # close the database 
+    # close the database
+    DBInterface.close!(db)
+end
+
+@testset "Appender Struct" begin
+    db = DBInterface.connect(DuckDB.DB)
+
+    DBInterface.execute(db, "CREATE TABLE struct_tbl(s STRUCT(a INTEGER, b VARCHAR))")
+    appender = DuckDB.Appender(db, "struct_tbl")
+
+    DuckDB.append(appender, (a = Int32(1), b = "hello"))
+    DuckDB.end_row(appender)
+    DuckDB.append(appender, (a = Int32(2), b = missing))
+    DuckDB.end_row(appender)
+    DuckDB.append(appender, (a = missing, b = "world"))
+    DuckDB.end_row(appender)
+    DuckDB.append(appender, missing)
+    DuckDB.end_row(appender)
+    DuckDB.close(appender)
+
+    df = DataFrame(DBInterface.execute(db, "SELECT * FROM struct_tbl"))
+    @test isequal(df.s, [(a = 1, b = "hello"), (a = 2, b = missing), (a = missing, b = "world"), missing])
+
+    DBInterface.close!(db)
+end
+
+@testset "Appender Nested Struct" begin
+    db = DBInterface.connect(DuckDB.DB)
+
+    DBInterface.execute(db, "CREATE TABLE nested_struct_tbl(s STRUCT(x INTEGER, inner_s STRUCT(a INTEGER, b INTEGER)))")
+    appender = DuckDB.Appender(db, "nested_struct_tbl")
+
+    DuckDB.append(appender, (x = Int32(1), inner_s = (a = Int32(10), b = Int32(20))))
+    DuckDB.end_row(appender)
+    DuckDB.append(appender, missing)
+    DuckDB.end_row(appender)
+    DuckDB.close(appender)
+
+    df = DataFrame(DBInterface.execute(db, "SELECT * FROM nested_struct_tbl"))
+    @test isequal(df.s[1], (x = 1, inner_s = (a = 10, b = 20)))
+    @test isequal(df.s[2], missing)
+
     DBInterface.close!(db)
 end

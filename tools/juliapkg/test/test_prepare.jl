@@ -152,3 +152,21 @@ end
     result = DataFrame(DBInterface.execute(stmt, [DateTime(1992, 9, 20, 23, 10, 33)]))
     @test isequal(result.a, [DateTime(1992, 9, 20, 23, 10, 33)])
 end
+
+@testset "DBInterface.prepare: struct parameters" begin
+    con = DBInterface.connect(DuckDB.DB)
+
+    # basic struct binding
+    stmt = DBInterface.prepare(con, raw"SELECT $1::STRUCT(a INTEGER, b VARCHAR) AS s")
+    result = DataFrame(DBInterface.execute(stmt, [(a = Int32(42), b = "hello")]))
+    @test isequal(result.s, [(a = 42, b = "hello")])
+
+    # struct with missing fields
+    result = DataFrame(DBInterface.execute(stmt, [(a = Int32(42), b = missing)]))
+    @test isequal(result.s, [(a = 42, b = missing)])
+
+    result = DataFrame(DBInterface.execute(stmt, [(a = missing, b = "world")]))
+    @test isequal(result.s, [(a = missing, b = "world")])
+
+    DBInterface.close!(con)
+end

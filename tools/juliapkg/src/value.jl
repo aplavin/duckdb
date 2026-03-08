@@ -49,11 +49,22 @@ create_value(val::T) where {T <: Time} = Value(duckdb_create_time(Dates.value(va
 create_value(val::T) where {T <: DateTime} =
     Value(duckdb_create_timestamp((Dates.datetime2epochms(val) - ROUNDING_EPOCH_TO_UNIX_EPOCH_MS) * 1000))
 create_value(val::T) where {T <: AbstractString} = Value(duckdb_create_varchar_length(val, length(val)))
+create_value(::Missing) = Value(duckdb_create_null_value())
 function create_value(val::AbstractVector{T}) where {T}
     type = create_logical_type(T)
     values = create_value.(val)
     return Value(duckdb_create_list_value(type.handle, map(x -> x.handle, values), length(values)))
 end
+function create_value(val::NamedTuple{names, <:NTuple{N, Any}}) where {names, N}
+    type = create_logical_type(typeof(val))
+    field_values = map(create_value, values(val))
+    handles = map(v -> v.handle, field_values)
+    # direct ccall with NTuple ref to avoid heap-allocating a Vector for the handles
+    return GC.@preserve field_values Value(ccall(
+        (:duckdb_create_struct_value, libduckdb), duckdb_value,
+        (duckdb_logical_type, Ref{NTuple{N, duckdb_value}}), type.handle, handles
+    ))
+end
 function create_value(val::T) where {T}
-    throw(NotImplementedException("Unsupported type for getvalue"))
+    throw(NotImplementedException("Unsupported type for create_value: $T"))
 end
